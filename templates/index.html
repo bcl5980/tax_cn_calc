@@ -113,6 +113,12 @@
             margin-top: 30px;
             height: 400px;
             position: relative;
+            width: 100%;
+            overflow: hidden;
+        }
+        .chart-container canvas {
+            max-width: 100%;
+            max-height: 100%;
         }
         .tab-container {
             margin-top: 20px;
@@ -144,7 +150,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>中国广义税率计算器</h1>
+        <h1>税率计算器</h1>
         
         <div class="input-group">
             <div class="input-section">
@@ -154,8 +160,7 @@
                     <select id="city" onchange="updateCityParams()" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
                         <option value="">自定义</option>
                         <option value="北京">北京</option>
-                        <option value="上海">上海</option>
-                        <option value="深圳">深圳</option>
+                        <option value="上海" selected>上海</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -278,7 +283,7 @@
                     </div>
                     <div class="result-item">
                         <div class="result-label">最终税后收入</div>
-                        <div class="result-value" id="final_take_home_pay">-</div>
+                        <div class="result-value" id="final_take_home_pay" style="color: #28a745; font-weight: bold;">-</div>
                     </div>
                     <div class="result-item">
                         <div class="result-label">公司总成本</div>
@@ -319,6 +324,10 @@
                             <div class="result-value" id="bonus_tax">-</div>
                         </div>
                         <div class="result-item">
+                            <div class="result-label">优化后税后收入</div>
+                            <div class="result-value" id="optimized_after_tax_income" style="color: #28a745; font-weight: bold;">-</div>
+                        </div>
+                        <div class="result-item">
                             <div class="result-label">个人社保公积金</div>
                             <div class="result-value" id="year_end_ss">-</div>
                         </div>
@@ -347,7 +356,7 @@
                         <button onclick="generateChart()" style="background: #17a2b8; padding: 10px 20px;">📊 生成图表</button>
                     </div>
                 </div>
-                <div class="chart-container">
+                <div class="chart-container" style="height: 500px;">
                     <canvas id="taxChart"></canvas>
                 </div>
             </div>
@@ -521,6 +530,7 @@
                 setTextContent('total_tax', result.total_tax.toFixed(2) + ' 元');
                 setTextContent('salary_tax', result.salary_tax.toFixed(2) + ' 元');
                 setTextContent('bonus_tax', result.bonus_tax.toFixed(2) + ' 元');
+                setTextContent('optimized_after_tax_income', result.optimized_after_tax_income.toFixed(2) + ' 元');
                 setTextContent('year_end_ss', result.personal_social_security.toFixed(2) + ' 元');
                 
                 showTab('year-end');
@@ -707,6 +717,14 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        layout: {
+                            padding: {
+                                left: 10,
+                                right: 10,
+                                top: 10,
+                                bottom: 10
+                            }
+                        },
                         plugins: {
                             title: {
                                 display: true,
@@ -749,13 +767,25 @@
                                 title: {
                                     display: true,
                                     text: '税率 (%)'
+                                },
+                                grid: {
+                                    display: true
                                 }
                             },
                             x: {
                                 title: {
                                     display: true,
                                     text: '年薪 (万元)'
+                                },
+                                grid: {
+                                    display: true
                                 }
+                            }
+                        },
+                        elements: {
+                            point: {
+                                radius: 3,
+                                hoverRadius: 6
                             }
                         }
                     }
@@ -788,6 +818,11 @@
 
         // Initialize
         updateRangeValues();
+        
+        // Auto-load Shanghai parameters on page load
+        window.addEventListener('load', function() {
+            updateCityParams();
+        });
     </script>
 </body>
 </html>

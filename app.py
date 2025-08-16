@@ -162,24 +162,22 @@ def calculate_bonus_tax(bonus, monthly_salary):
     if bonus <= 0:
         return 0
         
-    # Calculate average monthly bonus
+    # Calculate average monthly bonus (this determines the tax bracket)
     avg_monthly_bonus = bonus / 12
     
-    # Determine tax rate based on combined monthly income
-    monthly_income = monthly_salary + avg_monthly_bonus
-    
-    # Progressive tax brackets for bonus calculation
-    if monthly_income <= 3000:
+    # Determine tax rate based on ONLY the monthly average bonus amount
+    # (not combined with monthly salary - this was the bug!)
+    if avg_monthly_bonus <= 3000:
         rate, quick_deduction = 0.03, 0
-    elif monthly_income <= 12000:
+    elif avg_monthly_bonus <= 12000:
         rate, quick_deduction = 0.1, 210
-    elif monthly_income <= 25000:
+    elif avg_monthly_bonus <= 25000:
         rate, quick_deduction = 0.2, 1410
-    elif monthly_income <= 35000:
+    elif avg_monthly_bonus <= 35000:
         rate, quick_deduction = 0.25, 2660
-    elif monthly_income <= 55000:
+    elif avg_monthly_bonus <= 55000:
         rate, quick_deduction = 0.3, 4410
-    elif monthly_income <= 80000:
+    elif avg_monthly_bonus <= 80000:
         rate, quick_deduction = 0.35, 7160
     else:
         rate, quick_deduction = 0.45, 15160
@@ -212,24 +210,32 @@ def optimize_year_end():
     def get_total_tax_and_cost(bonus):
         """Calculate total tax and company cost for given bonus amount"""
         if bonus < 0 or bonus > annual_salary:
-            return float('inf'), float('inf')
+            return float('inf'), float('inf'), float('inf')
         
         monthly_salary = max(0, (annual_salary - bonus) / 12)
-        monthly_base = calculate_monthly_base(monthly_salary * 12, base_amount)
+        # 社保基数应该基于原始年薪，不是拆分后的工资
+        monthly_base = calculate_monthly_base(annual_salary, base_amount)
         
         # Calculate social security
         personal_ss = monthly_base * sum(personal_rates.values()) * 12
         company_ss = monthly_base * sum(company_rates.values()) * 12
         
         # Calculate taxes
-        annual_salary_after_ss = monthly_salary * 12 - personal_ss
-        taxable_income = max(0, annual_salary_after_ss - 60000)
+        # 注意：拆分年终奖后，工资部分 = (annual_salary - bonus)
+        # 个税应该基于工资部分扣除社保后的金额
+        salary_after_ss = (annual_salary - bonus) - personal_ss
+        taxable_income = max(0, salary_after_ss - 60000)
         salary_tax = calculate_income_tax(taxable_income)
         bonus_tax = calculate_bonus_tax(bonus, monthly_salary)
         
-        # Calculate take-home and minimum wage supplement
-        take_home_pay = annual_salary_after_ss - salary_tax - bonus_tax
-        monthly_take_home = take_home_pay / 12
+        # Calculate take-home and minimum wage supplement  
+        # 工资税后收入 = 工资扣社保后 - 工资个税
+        salary_take_home = salary_after_ss - salary_tax
+        # 年终奖税后收入 = 年终奖 - 年终奖个税
+        bonus_take_home = bonus - bonus_tax
+        # 总税后收入
+        total_take_home = salary_take_home + bonus_take_home
+        monthly_take_home = total_take_home / 12
         min_wage_supplement_monthly = calculate_min_wage_supplement(monthly_take_home, min_wage)
         min_wage_supplement_annual = min_wage_supplement_monthly * 12
         
@@ -242,9 +248,15 @@ def optimize_year_end():
         """Get discrete critical points based on tax brackets"""
         points = [0, annual_salary]
         
-        # Tax bracket boundaries
-        brackets = [36000, 144000, 300000, 420000, 660000, 960000]
-        for bracket in brackets:
+        # Income tax bracket boundaries (for salary portion)
+        salary_brackets = [36000, 144000, 300000, 420000, 660000, 960000]
+        for bracket in salary_brackets:
+            if 0 < bracket < annual_salary:
+                points.append(bracket)
+        
+        # Year-end bonus tax bracket boundaries (monthly avg * 12)
+        bonus_brackets = [36000, 144000, 300000, 420000, 660000, 960000]  # 3k, 12k, 25k, 35k, 55k, 80k monthly
+        for bracket in bonus_brackets:
             if 0 < bracket < annual_salary:
                 points.append(bracket)
         
@@ -254,17 +266,17 @@ def optimize_year_end():
         
         return list(set([max(0, min(annual_salary, int(p))) for p in points]))
 
-    # Find optimal bonus amount (minimize total cost to company)
+    # Find optimal bonus amount (minimize total personal tax)
     discrete_points = get_discrete_points()
-    min_cost = float('inf')
+    min_tax = float('inf')
     best_bonus = 0
     best_supplement = 0
     
     # Test discrete points
     for bonus in discrete_points:
-        tax, cost, supplement = get_total_tax_and_cost(bonus)
-        if cost < min_cost:
-            min_cost = cost
+        total_tax, cost, supplement = get_total_tax_and_cost(bonus)
+        if total_tax < min_tax:
+            min_tax = total_tax
             best_bonus = bonus
             best_supplement = supplement
     
@@ -274,31 +286,63 @@ def optimize_year_end():
     
     for bonus in nearby:
         if 0 <= bonus <= annual_salary:
-            tax, cost, supplement = get_total_tax_and_cost(bonus)
-            if cost < min_cost:
-                min_cost = cost
+            total_tax, cost, supplement = get_total_tax_and_cost(bonus)
+            if total_tax < min_tax:
+                min_tax = total_tax
                 best_bonus = bonus
                 best_supplement = supplement
     
     # Calculate final breakdown
     monthly_salary = (annual_salary - best_bonus) / 12
-    monthly_base = calculate_monthly_base(monthly_salary * 12, base_amount)
+    monthly_base = calculate_monthly_base(annual_salary, base_amount)
     
     personal_ss = monthly_base * sum(personal_rates.values()) * 12
-    annual_salary_after_ss = monthly_salary * 12 - personal_ss
-    taxable_income = max(0, annual_salary_after_ss - 60000)
     
+    # 正确计算工资和年终奖的税后收入
+    salary_after_ss = (annual_salary - best_bonus) - personal_ss
+    taxable_income = max(0, salary_after_ss - 60000)
     salary_tax = calculate_income_tax(taxable_income)
     bonus_tax = calculate_bonus_tax(best_bonus, monthly_salary)
     
+    # 工资税后收入
+    salary_take_home = salary_after_ss - salary_tax
+    # 年终奖税后收入  
+    bonus_take_home = best_bonus - bonus_tax
+    # 总税后收入
+    total_take_home = salary_take_home + bonus_take_home
+    
+    # 最低工资补贴基于总税后收入
+    monthly_take_home = total_take_home / 12
+    min_wage_supplement_monthly = calculate_min_wage_supplement(monthly_take_home, min_wage)
+    min_wage_supplement_annual = min_wage_supplement_monthly * 12
+    
+    # 最终税后收入（包含最低工资补贴）
+    final_take_home_pay = total_take_home + min_wage_supplement_annual
+    
     # Calculate take-home pay including housing fund
     housing_fund_personal = monthly_base * personal_rates['housing_fund'] * 12
-    take_home_pay = annual_salary_after_ss - salary_tax - bonus_tax
-    final_take_home_pay = take_home_pay + best_supplement
+    
+    # 优化后总税后收入 = 最终税后收入
+    total_after_tax_income = final_take_home_pay
+    
     personal_take_home = final_take_home_pay + housing_fund_personal
+    
+    # Calculate company cost for final result
+    company_ss = monthly_base * sum(company_rates.values()) * 12
+    final_company_cost = annual_salary + company_ss + best_supplement
     
     # Calculate baseline (no bonus)
     baseline_tax, baseline_cost, baseline_supplement = get_total_tax_and_cost(0)
+    
+    # Calculate baseline take-home pay for comparison
+    baseline_monthly_salary = annual_salary / 12
+    baseline_monthly_base = calculate_monthly_base(annual_salary, base_amount)
+    baseline_personal_ss = baseline_monthly_base * sum(personal_rates.values()) * 12
+    baseline_annual_salary_after_ss = annual_salary - baseline_personal_ss
+    baseline_taxable_income = max(0, baseline_annual_salary_after_ss - 60000)
+    baseline_salary_tax = calculate_income_tax(baseline_taxable_income)
+    baseline_take_home_pay = baseline_annual_salary_after_ss - baseline_salary_tax
+    baseline_final_take_home_pay = baseline_take_home_pay + baseline_supplement
     
     best_breakdown = {
         'bonus': best_bonus,
@@ -307,12 +351,15 @@ def optimize_year_end():
         'salary_tax': salary_tax,
         'bonus_tax': bonus_tax,
         'personal_social_security': personal_ss,
-        'take_home_pay': take_home_pay,
-        'min_wage_supplement': best_supplement,
+        'take_home_pay': total_take_home,  # 使用总税后收入（不含补贴）
+        'min_wage_supplement': min_wage_supplement_annual,
         'final_take_home_pay': final_take_home_pay,
+        'optimized_after_tax_income': total_after_tax_income,  # 优化后总税后收入（工资+年终奖+补贴）
+        'baseline_after_tax_income': baseline_final_take_home_pay,  # 基准税后收入
+        'tax_savings': total_after_tax_income - baseline_final_take_home_pay,  # 税负节省（可能为负）
         'personal_take_home': personal_take_home,
-        'total_company_cost': min_cost,
-        'cost_savings': baseline_cost - min_cost,
+        'total_company_cost': final_company_cost,
+        'cost_savings': baseline_cost - final_company_cost,
         'baseline_cost': baseline_cost
     }
     
