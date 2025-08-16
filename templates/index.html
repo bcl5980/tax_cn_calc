@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>税率计算器</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .input-section {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+        .input-section h3 {
+            margin-top: 0;
+            color: #555;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #666;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        .range-value {
+            text-align: center;
+            font-weight: bold;
+            color: #0066cc;
+        }
+        button {
+            background: #0066cc;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #e8f4f8;
+            border-radius: 8px;
+        }
+        .results h3 {
+            color: #0066cc;
+            margin-top: 0;
+        }
+        .result-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .result-item {
+            background: white;
+            padding: 15px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .result-label {
+            font-size: 14px;
+            color: #666;
+        }
+        .result-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #0066cc;
+        }
+        .chart-container {
+            margin-top: 30px;
+            height: 400px;
+            position: relative;
+        }
+        .tab-container {
+            margin-top: 20px;
+        }
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab-button {
+            background: #f0f0f0;
+            color: #333;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px 4px 0 0;
+            cursor: pointer;
+        }
+        .tab-button.active {
+            background: #0066cc;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>中国广义税率计算器</h1>
+        
+        <div class="input-group">
+            <div class="input-section">
+                <h3>基本收入信息</h3>
+                <div class="form-group">
+                    <label for="city">选择城市</label>
+                    <select id="city" onchange="updateCityParams()" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        <option value="">自定义</option>
+                        <option value="北京">北京</option>
+                        <option value="上海">上海</option>
+                        <option value="深圳">深圳</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="annual_salary">税前年薪 (元)</label>
+                    <input type="number" id="annual_salary" value="300000" min="0" step="1000">
+                </div>
+                <div class="form-group">
+                    <label for="base_amount">社保公积金基数 (元)</label>
+                    <input type="number" id="base_amount" value="8000" min="0" step="100">
+                </div>
+                <div class="form-group">
+                    <label for="min_wage">最低工资标准 (元/月)</label>
+                    <input type="number" id="min_wage" value="0" min="0" step="10">
+                </div>
+            </div>
+            
+            <div class="input-section">
+                <h3>公司部分比例</h3>
+                <div class="form-group">
+                    <label>养老保险: <span class="range-value" id="company_pension_value">16%</span></label>
+                    <input type="range" id="company_pension" min="0" max="30" value="16" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>医疗保险: <span class="range-value" id="company_medical_value">9.8%</span></label>
+                    <input type="range" id="company_medical" min="0" max="20" value="9.8" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>失业保险: <span class="range-value" id="company_unemployment_value">0.5%</span></label>
+                    <input type="range" id="company_unemployment" min="0" max="5" value="0.5" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>工伤保险: <span class="range-value" id="company_injury_value">0.2%</span></label>
+                    <input type="range" id="company_injury" min="0" max="2" value="0.2" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>公积金: <span class="range-value" id="company_housing_fund_value">5%</span></label>
+                    <input type="range" id="company_housing_fund" min="0" max="20" value="5" step="0.1">
+                </div>
+            </div>
+            
+            <div class="input-section">
+                <h3>个人部分比例</h3>
+                <div class="form-group">
+                    <label>养老保险: <span class="range-value" id="personal_pension_value">8%</span></label>
+                    <input type="range" id="personal_pension" min="0" max="30" value="8" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>医疗保险: <span class="range-value" id="personal_medical_value">2%</span></label>
+                    <input type="range" id="personal_medical" min="0" max="20" value="2" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>失业保险: <span class="range-value" id="personal_unemployment_value">0.5%</span></label>
+                    <input type="range" id="personal_unemployment" min="0" max="5" value="0.5" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>公积金: <span class="range-value" id="personal_housing_fund_value">5%</span></label>
+                    <input type="range" id="personal_housing_fund" min="0" max="20" value="5" step="0.1">
+                </div>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin: 30px 0; display: flex; gap: 15px; justify-content: center;">
+            <button onclick="calculateTax()" style="background: #28a745; font-size: 18px; padding: 15px 30px;">💰 计算税率</button>
+            <button onclick="optimizeYearEnd()" style="background: #ffc107; font-size: 18px; padding: 15px 30px;">🎯 年终优化</button>
+        </div>
+        
+        <div class="results" id="results" style="display: none;">
+            <h3>计算结果</h3>
+            
+            <!-- Key Rates on Top Row -->
+            <div style="background: #e8f4f8; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin-top: 0; color: #0066cc; text-align: center;">关键税率指标</h4>
+                <div class="result-grid" style="grid-template-columns: repeat(3, 1fr);">
+                    <div class="result-item" style="background: #fff; border-left: 4px solid #28a745;">
+                        <div class="result-label">个人税后/个人税前</div>
+                        <div class="result-value" id="rate1" style="font-size: 24px; color: #28a745;">-</div>
+                    </div>
+                    <div class="result-item" style="background: #fff; border-left: 4px solid #17a2b8;">
+                        <div class="result-label">（税后+公积金）/公司总成本</div>
+                        <div class="result-value" id="rate2" style="font-size: 24px; color: #17a2b8;">-</div>
+                    </div>
+                    <div class="result-item" style="background: #fff; border-left: 4px solid #ffc107;">
+                        <div class="result-label">个人税后/公司总成本</div>
+                        <div class="result-value" id="rate3" style="font-size: 24px; color: #ffc107;">-</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Detailed Data Below -->
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px;">
+                <h4 style="margin-top: 0; color: #495057;">详细计算数据</h4>
+                <div class="result-grid">
+                    <div class="result-item">
+                        <div class="result-label">月度基数</div>
+                        <div class="result-value" id="monthly_base">-</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">公司社保总成本</div>
+                        <div class="result-value" id="company_total">-</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">个人社保扣除</div>
+                        <div class="result-value" id="personal_social_security">-</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">税前收入</div>
+                        <div class="result-value" id="pre_tax_income">-</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">个人所得税</div>
+                        <div class="result-value" id="income_tax">-</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">基础税后收入</div>
+                        <div class="result-value" id="take_home_pay">-</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">最低工资补贴</div>
+                        <div class="result-value" id="min_wage_supplement">-</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">最终税后收入</div>
+                        <div class="result-value" id="final_take_home_pay">-</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-label">公司总成本</div>
+                        <div class="result-value" id="total_company_cost">-</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="tab-container">
+            <div class="tab-buttons">
+                <button class="tab-button active" onclick="showTab('year-end', this)">年终优化</button>
+                <button class="tab-button" onclick="showTab('chart', this)">税率图表</button>
+            </div>
+            
+            <div id="year-end" class="tab-content active">
+                <div id="year_end_results" style="display: none;">
+                    <h3>年终优化结果</h3>
+                    <div class="result-grid">
+                        <div class="result-item">
+                            <div class="result-label">最佳年终奖金</div>
+                            <div class="result-value" id="best_bonus">-</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">优化后月薪</div>
+                            <div class="result-value" id="monthly_salary">-</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">总税额</div>
+                            <div class="result-value" id="total_tax">-</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">工资个税</div>
+                            <div class="result-value" id="salary_tax">-</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">年终奖个税</div>
+                            <div class="result-value" id="bonus_tax">-</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">个人社保公积金</div>
+                            <div class="result-value" id="year_end_ss">-</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="chart" class="tab-content">
+                <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin-top: 0; color: #333;">图表设置</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div>
+                            <label>起始年薪 (万元)</label>
+                            <input type="number" id="chart_min" value="5" min="1" max="100" step="1" style="width: 100%; padding: 8px;">
+                        </div>
+                        <div>
+                            <label>结束年薪 (万元)</label>
+                            <input type="number" id="chart_max" value="50" min="1" max="100" step="1" style="width: 100%; padding: 8px;">
+                        </div>
+                        <div>
+                            <label>步进 (万元)</label>
+                            <input type="number" id="chart_step" value="2" min="0.5" max="5" step="0.5" style="width: 100%; padding: 8px;">
+                        </div>
+                    </div>
+                    <div style="text-align: center; margin-top: 15px;">
+                        <button onclick="generateChart()" style="background: #17a2b8; padding: 10px 20px;">📊 生成图表</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="taxChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Update range value displays
+        function updateRangeValues() {
+            const ranges = [
+                'company_pension', 'company_medical', 'company_unemployment', 'company_injury', 'company_housing_fund',
+                'personal_pension', 'personal_medical', 'personal_unemployment', 'personal_housing_fund'
+            ];
+            
+            ranges.forEach(id => {
+                const slider = document.getElementById(id);
+                const value = document.getElementById(id + '_value');
+                if (slider && value) {
+                    value.textContent = slider.value + '%';
+                    slider.addEventListener('input', () => {
+                        value.textContent = slider.value + '%';
+                    });
+                }
+            });
+        }
+
+        // Update city parameters when city is selected
+        async function updateCityParams() {
+            const citySelect = document.getElementById('city');
+            const selectedCity = citySelect.value;
+            
+            if (!selectedCity) return; // No city selected, keep current values
+            
+            try {
+                const response = await fetch('/get_city_params');
+                const cityParams = await response.json();
+                
+                if (cityParams[selectedCity]) {
+                    const params = cityParams[selectedCity];
+                    
+                    // Update base amount
+                    const baseAmountEl = document.getElementById('base_amount');
+                    if (baseAmountEl) {
+                        baseAmountEl.value = params.base_amount;
+                    }
+                    
+                    // Update minimum wage
+                    const minWageEl = document.getElementById('min_wage');
+                    if (minWageEl && params.min_wage) {
+                        minWageEl.value = params.min_wage;
+                    }
+                    
+                    // Update company rates
+                    document.getElementById('company_pension').value = params.company_pension;
+                    document.getElementById('company_medical').value = params.company_medical;
+                    document.getElementById('company_unemployment').value = params.company_unemployment;
+                    document.getElementById('company_injury').value = params.company_injury;
+                    document.getElementById('company_housing_fund').value = params.company_housing_fund;
+                    
+                    // Update personal rates
+                    document.getElementById('personal_pension').value = params.personal_pension;
+                    document.getElementById('personal_medical').value = params.personal_medical;
+                    document.getElementById('personal_unemployment').value = params.personal_unemployment;
+                    document.getElementById('personal_housing_fund').value = params.personal_housing_fund;
+                    
+                    // Update displays
+                    updateRangeValues();
+                }
+            } catch (error) {
+                console.error('获取城市参数失败:', error);
+            }
+        }
+
+        async function calculateTax() {
+            const data = {
+                annual_salary: document.getElementById('annual_salary').value,
+                base_amount: document.getElementById('base_amount').value,
+                min_wage: document.getElementById('min_wage').value,
+                company_pension: document.getElementById('company_pension').value,
+                company_medical: document.getElementById('company_medical').value,
+                company_unemployment: document.getElementById('company_unemployment').value,
+                company_injury: document.getElementById('company_injury').value,
+                company_housing_fund: document.getElementById('company_housing_fund').value,
+                personal_pension: document.getElementById('personal_pension').value,
+                personal_medical: document.getElementById('personal_medical').value,
+                personal_unemployment: document.getElementById('personal_unemployment').value,
+                personal_housing_fund: document.getElementById('personal_housing_fund').value
+            };
+
+            try {
+                const response = await fetch('/calculate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                const resultsDiv = document.getElementById('results');
+                if (resultsDiv) resultsDiv.style.display = 'block';
+                
+                // Helper function to safely set text content
+                function setTextContent(id, value) {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.textContent = value;
+                    }
+                }
+                
+                setTextContent('monthly_base', result.monthly_base.toFixed(2) + ' 元');
+                setTextContent('company_total', result.company_total.toFixed(2) + ' 元');
+                setTextContent('personal_social_security', result.personal_social_security.toFixed(2) + ' 元');
+                setTextContent('pre_tax_income', result.pre_tax_income.toFixed(2) + ' 元');
+                setTextContent('income_tax', result.income_tax.toFixed(2) + ' 元');
+                setTextContent('take_home_pay', result.take_home_pay.toFixed(2) + ' 元');
+                setTextContent('min_wage_supplement', result.min_wage_supplement.toFixed(2) + ' 元');
+                setTextContent('final_take_home_pay', result.final_take_home_pay.toFixed(2) + ' 元');
+                setTextContent('personal_take_home', result.personal_take_home.toFixed(2) + ' 元');
+                setTextContent('total_company_cost', result.total_company_cost.toFixed(2) + ' 元');
+                setTextContent('rate1', result.rate1.toFixed(2) + '%');
+                setTextContent('rate2', result.rate2.toFixed(2) + '%');
+                setTextContent('rate3', result.rate3.toFixed(2) + '%');
+                
+            } catch (error) {
+                alert('计算出错: ' + error.message);
+            }
+        }
+
+        async function optimizeYearEnd() {
+            const data = {
+                annual_salary: document.getElementById('annual_salary').value,
+                base_amount: document.getElementById('base_amount').value,
+                min_wage: document.getElementById('min_wage').value,
+                company_pension: document.getElementById('company_pension').value,
+                company_medical: document.getElementById('company_medical').value,
+                company_unemployment: document.getElementById('company_unemployment').value,
+                company_injury: document.getElementById('company_injury').value,
+                company_housing_fund: document.getElementById('company_housing_fund').value,
+                personal_pension: document.getElementById('personal_pension').value,
+                personal_medical: document.getElementById('personal_medical').value,
+                personal_unemployment: document.getElementById('personal_unemployment').value,
+                personal_housing_fund: document.getElementById('personal_housing_fund').value
+            };
+            
+            try {
+                const response = await fetch('/optimize_year_end', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                const yearEndDiv = document.getElementById('year_end_results');
+                if (yearEndDiv) yearEndDiv.style.display = 'block';
+                
+                // Helper function to safely set text content
+                function setTextContent(id, value) {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.textContent = value;
+                    }
+                }
+                
+                setTextContent('best_bonus', result.bonus.toFixed(2) + ' 元');
+                setTextContent('monthly_salary', result.monthly_salary.toFixed(2) + ' 元');
+                setTextContent('total_tax', result.total_tax.toFixed(2) + ' 元');
+                setTextContent('salary_tax', result.salary_tax.toFixed(2) + ' 元');
+                setTextContent('bonus_tax', result.bonus_tax.toFixed(2) + ' 元');
+                setTextContent('year_end_ss', result.personal_social_security.toFixed(2) + ' 元');
+                
+                showTab('year-end');
+                
+            } catch (error) {
+                alert('优化计算出错: ' + error.message);
+            }
+        }
+
+        async function generateChart() {
+            const chartMinEl = document.getElementById('chart_min');
+            const chartMaxEl = document.getElementById('chart_max');
+            const chartStepEl = document.getElementById('chart_step');
+            
+            if (!chartMinEl || !chartMaxEl || !chartStepEl) {
+                alert('图表参数元素未找到');
+                return;
+            }
+            
+            const minSalary = parseFloat(chartMinEl.value) * 10000;
+            const maxSalary = parseFloat(chartMaxEl.value) * 10000;
+            const step = parseFloat(chartStepEl.value) * 10000;
+            
+            if (minSalary >= maxSalary) {
+                alert('起始年薪必须小于结束年薪');
+                return;
+            }
+            
+            if (step <= 0) {
+                alert('步进必须大于0');
+                return;
+            }
+            
+            const data = {
+                annual_salary: document.getElementById('annual_salary')?.value || '300000',
+                base_amount: document.getElementById('base_amount')?.value || '8000',
+                min_wage: document.getElementById('min_wage')?.value || '0',
+                company_pension: document.getElementById('company_pension')?.value || '16',
+                company_medical: document.getElementById('company_medical')?.value || '9.8',
+                company_unemployment: document.getElementById('company_unemployment')?.value || '0.5',
+                company_injury: document.getElementById('company_injury')?.value || '0.2',
+                company_housing_fund: document.getElementById('company_housing_fund')?.value || '5',
+                personal_pension: document.getElementById('personal_pension')?.value || '8',
+                personal_medical: document.getElementById('personal_medical')?.value || '2',
+                personal_unemployment: document.getElementById('personal_unemployment')?.value || '0.5',
+                personal_housing_fund: document.getElementById('personal_housing_fund')?.value || '5'
+            };
+
+            const salaries = [];
+            const rates1 = [];
+            const rates2 = [];
+            const rates3 = [];
+            
+            // Show loading indicator
+            const chartContainer = document.querySelector('.chart-container');
+            if (chartContainer) {
+                chartContainer.innerHTML = '<div style="text-align: center; padding: 50px; color: #666;">正在生成图表...</div>';
+            }
+            
+            try {
+                for (let salary = minSalary; salary <= maxSalary; salary += step) {
+                    data.annual_salary = salary;
+                    
+                    const response = await fetch('/calculate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(data)
+                    });
+                    
+                    const result = await response.json();
+                    salaries.push(salary / 10000); // Convert to 万 for display
+                    rates1.push(result.rate1);
+                    rates2.push(result.rate2);
+                    rates3.push(result.rate3);
+                }
+
+                // Restore canvas
+                if (chartContainer) {
+                    chartContainer.innerHTML = '<canvas id="taxChart"></canvas>';
+                }
+                
+                const canvas = document.getElementById('taxChart');
+                if (!canvas) {
+                    throw new Error('无法创建图表画布');
+                }
+                
+                const ctx = canvas.getContext('2d');
+                
+                // Calculate statistics
+                function calculateStats(data, labels, name) {
+                    if (data.length === 0) return null;
+                    
+                    let maxRate = Math.max(...data);
+                    let minRate = Math.min(...data);
+                    let maxIndex = data.indexOf(maxRate);
+                    let minIndex = data.indexOf(minRate);
+                    
+                    return {
+                        name: name,
+                        max: { rate: maxRate, salary: labels[maxIndex] },
+                        min: { rate: minRate, salary: labels[minIndex] }
+                    };
+                }
+                
+                const stats1 = calculateStats(rates1, salaries, '个人税后/个人税前');
+                const stats2 = calculateStats(rates2, salaries, '(个人税后+公积金)/公司总成本');
+                const stats3 = calculateStats(rates3, salaries, '个人税后/公司总成本');
+                
+                // Create statistics display
+                let statsHtml = '<div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">';
+                statsHtml += '<h4 style="margin-top: 0; color: #495057; text-align: center;">税率统计分析</h4>';
+                statsHtml += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">';
+                
+                [stats1, stats2, stats3].forEach((stat, index) => {
+                    const colors = ['#28a745', '#17a2b8', '#ffc107'];
+                    if (stat) {
+                        statsHtml += `
+                            <div style="background: white; padding: 12px; border-radius: 6px; border-left: 4px solid ${colors[index]};">
+                                <div style="font-weight: bold; color: #333; margin-bottom: 8px;">${stat.name}</div>
+                                <div style="font-size: 14px; color: #666;">
+                                    <div>最高: <span style="color: #dc3545; font-weight: bold;">${stat.max.rate.toFixed(2)}%</span> (年薪${stat.max.salary}万)</div>
+                                    <div>最低: <span style="color: #28a745; font-weight: bold;">${stat.min.rate.toFixed(2)}%</span> (年薪${stat.min.salary}万)</div>
+                                    <div>差异: <span style="color: #6c757d; font-weight: bold;">${(stat.max.rate - stat.min.rate).toFixed(2)}%</span></div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                statsHtml += '</div></div>';
+                
+                // Insert statistics before the canvas
+                if (chartContainer) {
+                    chartContainer.innerHTML = statsHtml + '<canvas id="taxChart"></canvas>';
+                }
+                
+                // Re-get canvas after adding statistics
+                const newCanvas = document.getElementById('taxChart');
+                if (!newCanvas) {
+                    throw new Error('无法重新创建图表画布');
+                }
+                
+                const newCtx = newCanvas.getContext('2d');
+                
+                // Destroy existing chart if exists
+                if (window.myChart) {
+                    window.myChart.destroy();
+                }
+                
+                // Create new chart instance
+                window.myChart = new Chart(newCtx, {
+                    type: 'line',
+                    data: {
+                        labels: salaries.map(s => s + '万'),
+                        datasets: [
+                            {
+                                label: '个人税后/个人税前',
+                                data: rates1,
+                                borderColor: 'rgb(75, 192, 192)',
+                                backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                                tension: 0.1,
+                                fill: false
+                            },
+                            {
+                                label: '(个人税后+公积金)/公司总成本',
+                                data: rates2,
+                                borderColor: 'rgb(255, 99, 132)',
+                                backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                                tension: 0.1,
+                                fill: false
+                            },
+                            {
+                                label: '个人税后/公司总成本',
+                                data: rates3,
+                                borderColor: 'rgb(54, 162, 235)',
+                                backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                                tension: 0.1,
+                                fill: false
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: `年薪 ${minSalary/10000}-${maxSalary/10000}万 税率变化趋势`
+                            },
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    afterBody: function(context) {
+                                        if (context.length > 0) {
+                                            const dataIndex = context[0].dataIndex;
+                                            const salary = salaries[dataIndex];
+                                            let tooltipText = [];
+                                            
+                                            // Add statistics info for current point
+                                            if (stats1 && (salary === stats1.max.salary || salary === stats1.min.salary)) {
+                                                tooltipText.push(`个人税后/个人税前: ${salary === stats1.max.salary ? '最高点' : '最低点'}`);
+                                            }
+                                            if (stats2 && (salary === stats2.max.salary || salary === stats2.min.salary)) {
+                                                tooltipText.push(`(税后+公积金)/总成本: ${salary === stats2.max.salary ? '最高点' : '最低点'}`);
+                                            }
+                                            if (stats3 && (salary === stats3.max.salary || salary === stats3.min.salary)) {
+                                                tooltipText.push(`税后/总成本: ${salary === stats3.max.salary ? '最高点' : '最低点'}`);
+                                            }
+                                            
+                                            return tooltipText;
+                                        }
+                                        return [];
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: Math.max(Math.max(...rates1), Math.max(...rates2), Math.max(...rates3)) * 1.1 || 100,
+                                title: {
+                                    display: true,
+                                    text: '税率 (%)'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: '年薪 (万元)'
+                                }
+                            }
+                        }
+                    }
+                });
+                
+            } catch (error) {
+                if (chartContainer) {
+                    chartContainer.innerHTML = '<div style="text-align: center; padding: 50px; color: #e74c3c;">图表生成失败: ' + error.message + '</div>';
+                }
+            }
+        }
+
+        function showTab(tabName, buttonElement) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.classList.remove('active');
+            });
+            
+            document.getElementById(tabName).classList.add('active');
+            if (buttonElement) {
+                buttonElement.classList.add('active');
+            } else {
+                // Fallback for event-based calls
+                const activeButton = document.querySelector(`[onclick*="${tabName}"]`);
+                if (activeButton) activeButton.classList.add('active');
+            }
+        }
+
+        // Initialize
+        updateRangeValues();
+    </script>
+</body>
+</html>
