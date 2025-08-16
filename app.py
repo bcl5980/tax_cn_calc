@@ -168,21 +168,21 @@ def calculate_bonus_tax(bonus, monthly_salary):
     # Determine tax rate based on ONLY the monthly average bonus amount
     # (not combined with monthly salary - this was the bug!)
     if avg_monthly_bonus <= 3000:
-        rate, quick_deduction = 0.03, 0
+        rate = 0.03
     elif avg_monthly_bonus <= 12000:
-        rate, quick_deduction = 0.1, 210
+        rate = 0.1
     elif avg_monthly_bonus <= 25000:
-        rate, quick_deduction = 0.2, 1410
+        rate = 0.2
     elif avg_monthly_bonus <= 35000:
-        rate, quick_deduction = 0.25, 2660
+        rate = 0.25
     elif avg_monthly_bonus <= 55000:
-        rate, quick_deduction = 0.3, 4410
+        rate = 0.3
     elif avg_monthly_bonus <= 80000:
-        rate, quick_deduction = 0.35, 7160
+        rate = 0.35
     else:
-        rate, quick_deduction = 0.45, 15160
+        rate = 0.45
     
-    return bonus * rate - quick_deduction
+    return bonus * rate
 
 @app.route('/optimize_year_end', methods=['POST'])
 def optimize_year_end():
